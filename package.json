@@ -1,10 +1,9 @@
 {
   "dependencies": {
-    "blake3": "2.1.4"
+    "blake3": "2.1.4",
+    "express": "^5.1.0"
   },
   "scripts": {
-  "start": "node hash_evaluation.js"
+    "start": "node hash_evaluation.js"
+  }
 }
-  
-}
-

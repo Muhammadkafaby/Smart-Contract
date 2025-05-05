@@ -1,6 +1,11 @@
 const crypto = require("crypto");
 const { createHash } = require("blake3");
 const fs = require("fs");
+const express = require("express");
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.use(express.json());
+app.use(express.static("public"));
 
 // Fungsi untuk melakukan hashing dengan SHA-512 dan BLAKE3
 function gabungkanHash(input) {
@@ -17,7 +22,7 @@ function hitungKeamanan(n) {
 }
 
 // Fungsi untuk evaluasi performa hashing
-async function evaluasiPerformaHash(input, iterasi = 1000, networkSize = 1000) {
+async function evaluasiPerformaHash(input, iterasi = 1000, networkSize = 1000, returnResult = false) {
   console.log("=== Evaluasi Performa Hashing ===");
 
   // Waktu hashing SHA-512
@@ -55,6 +60,22 @@ async function evaluasiPerformaHash(input, iterasi = 1000, networkSize = 1000) {
   const keamananSHA512 = hitungKeamanan(512); // Panjang output SHA-512 adalah 512 bit
   const keamananBlake3 = hitungKeamanan(256); // Panjang output BLAKE3 adalah 256 bit
   const keamananGabungan = hitungKeamanan(512 + 256); // Panjang output gabungan adalah 768 bit
+
+  if (returnResult) {
+    return {
+      latencyGabungan: latencyGabungan.toFixed(3),
+      scalabilityGabungan: scalabilityGabungan.toFixed(6),
+      waktuSHA512: waktuSHA512.toFixed(3),
+      waktuBlake3: waktuBlake3.toFixed(3),
+      waktuGabungan: waktuGabungan.toFixed(3),
+      throughputSHA512: (1 / waktuSHA512).toFixed(3),
+      throughputBlake3: (1 / waktuBlake3).toFixed(3),
+      throughputGabungan: (1 / waktuGabungan).toFixed(3),
+      keamananSHA512,
+      keamananBlake3,
+      keamananGabungan
+    };
+  }
 
   // Tampilkan hasil di terminal
   console.log(`Latency (Gabungan): ${latencyGabungan.toFixed(3)} ms`);
@@ -96,3 +117,13 @@ async function evaluasiPerformaHash(input, iterasi = 1000, networkSize = 1000) {
 // Contoh penggunaan
 const inputData = "Ini adalah input untuk hashing.";
 evaluasiPerformaHash(inputData, 1000, 1000);
+
+app.post("/api/hash", async (req, res) => {
+  const { input, iterasi, networkSize } = req.body;
+  const result = await evaluasiPerformaHash(input, iterasi, networkSize, true); // true = return result, not console.log
+  res.json(result);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

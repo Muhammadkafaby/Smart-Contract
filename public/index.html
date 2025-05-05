@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hash Evaluation Frontend</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: linear-gradient(120deg, #f8fafc 0%, #e0e7ef 100%);
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    .container {
+      background: #fff;
+      margin-top: 48px;
+      padding: 2.5em 2em 2em 2em;
+      border-radius: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 420px;
+      width: 100%;
+    }
+    h2 {
+      text-align: center;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 1.5em;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.7em;
+      color: #4a5568;
+      font-size: 1em;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 0.7em;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 1em;
+      margin-top: 0.2em;
+      margin-bottom: 1em;
+      background: #f9fafb;
+      transition: border 0.2s;
+    }
+    input:focus {
+      border: 1.5px solid #6366f1;
+      outline: none;
+      background: #fff;
+    }
+    button {
+      width: 100%;
+      padding: 0.9em;
+      background: linear-gradient(90deg, #6366f1 0%, #60a5fa 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.5em;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: linear-gradient(90deg, #4f46e5 0%, #2563eb 100%);
+    }
+    .result {
+      margin-top: 2em;
+      background: #f1f5f9;
+      padding: 1.2em 1em;
+      border-radius: 12px;
+      color: #22223b;
+      font-size: 1em;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      word-break: break-all;
+    }
+    .result hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 1em 0;
+    }
+    @media (max-width: 600px) {
+      .container { max-width: 98vw; padding: 1.2em 0.5em; }
+      .result { font-size: 0.98em; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Hash Evaluation<br><span style="font-size:0.7em;font-weight:400;color:#64748b">SHA-512 + BLAKE3</span></h2>
+    <form id="hashForm">
+      <label>Input Data:
+        <input type="text" id="inputData" required placeholder="Enter data for hashing...">
+      </label>
+      <label>Iterations:
+        <input type="number" id="iterasi" value="1000" min="1">
+      </label>
+      <label>Network Size:
+        <input type="number" id="networkSize" value="1000" min="1">
+      </label>
+      <button type="submit">Evaluate</button>
+    </form>
+    <div class="result" id="result" style="display:none"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const resultDiv = document.getElementById('result');
+    let chartInstance = null;
+    let lastResult = null;
+
+    document.getElementById('hashForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const input = document.getElementById('inputData').value;
+      const iterasi = parseInt(document.getElementById('iterasi').value);
+      const networkSize = parseInt(document.getElementById('networkSize').value);
+      resultDiv.style.display = 'none';
+      resultDiv.innerHTML = '<div class="loader"></div> Processing...';
+      try {
+        const res = await fetch('/api/hash', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input, iterasi, networkSize })
+        });
+        const data = await res.json();
+        lastResult = data;
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:1em;flex-wrap:wrap">
+            <span style="font-size:1.1em;font-weight:600;color:#374151">Evaluation Result</span>
+            <button id="exportPDF" style="background:#6366f1;color:#fff;border:none;padding:0.4em 1em;border-radius:6px;cursor:pointer;font-size:0.95em;transition:background 0.2s;">Export PDF</button>
+          </div>
+          <canvas id="hashChart" style="margin:1em 0 0.5em 0;max-width:100%;background:#fff;border-radius:8px;"></canvas>
+          <div class="fadein" style="margin-top:1.2em;">
+            <div class="google-card">
+              <div class="row"><span class="label">Combined Latency</span><span class="value">${data.latencyGabungan} <span class="unit">ms</span></span></div>
+              <div class="row"><span class="label">Scalability Efficiency</span><span class="value">${data.scalabilityGabungan} <span class="unit">TPS/Node</span></span></div>
+              <div class="row"><span class="label">SHA-512 Hash Time</span><span class="value">${data.waktuSHA512} <span class="unit">ms</span></span></div>
+              <div class="row"><span class="label">BLAKE3 Hash Time</span><span class="value">${data.waktuBlake3} <span class="unit">ms</span></span></div>
+              <div class="row"><span class="label">Combined Hash Time</span><span class="value">${data.waktuGabungan} <span class="unit">ms</span></span></div>
+              <div class="row"><span class="label">SHA-512 Throughput</span><span class="value">${data.throughputSHA512} <span class="unit">MB/s</span></span></div>
+              <div class="row"><span class="label">BLAKE3 Throughput</span><span class="value">${data.throughputBlake3} <span class="unit">MB/s</span></span></div>
+              <div class="row"><span class="label">Combined Throughput</span><span class="value">${data.throughputGabungan} <span class="unit">MB/s</span></span></div>
+            </div>
+            <div class="google-card" style="margin-top:1.2em;">
+              <div class="row"><span class="label">SHA-512 Collision Resistance</span><span class="value">${data.keamananSHA512.collisionResistance}</span></div>
+              <div class="row"><span class="label">SHA-512 Pre-image Resistance</span><span class="value">${data.keamananSHA512.preImageResistance}</span></div>
+              <div class="row"><span class="label">BLAKE3 Collision Resistance</span><span class="value">${data.keamananBlake3.collisionResistance}</span></div>
+              <div class="row"><span class="label">BLAKE3 Pre-image Resistance</span><span class="value">${data.keamananBlake3.preImageResistance}</span></div>
+              <div class="row"><span class="label">Combined Collision Resistance</span><span class="value">${data.keamananGabungan.collisionResistance}</span></div>
+              <div class="row"><span class="label">Combined Pre-image Resistance</span><span class="value">${data.keamananGabungan.preImageResistance}</span></div>
+            </div>
+          </div>
+        `;
+        animateResult();
+        renderChart(data);
+        document.getElementById('exportPDF').onclick = exportPDF;
+      } catch (err) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = 'Error: ' + err;
+      }
+    }
+
+    function animateResult() {
+      const fade = document.querySelector('.fadein');
+      if (fade) {
+        fade.style.opacity = 0;
+        fade.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+          fade.style.transition = 'opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)';
+          fade.style.opacity = 1;
+          fade.style.transform = 'translateY(0)';
+        }, 100);
+      }
+    }
+
+    function renderChart(data) {
+      const ctx = document.getElementById('hashChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['SHA-512', 'BLAKE3', 'Combined'],
+          datasets: [
+            {
+              label: 'Hash Time (ms)',
+              data: [parseFloat(data.waktuSHA512), parseFloat(data.waktuBlake3), parseFloat(data.waktuGabungan)],
+              backgroundColor: ['#6366f1', '#60a5fa', '#a3e635'],
+              borderRadius: 8,
+              borderWidth: 0
+            },
+            {
+              label: 'Throughput (MB/s)',
+              data: [parseFloat(data.throughputSHA512), parseFloat(data.throughputBlake3), parseFloat(data.throughputGabungan)],
+              backgroundColor: ['#818cf8', '#38bdf8', '#bef264'],
+              borderRadius: 8,
+              borderWidth: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true },
+            title: { display: false }
+          },
+          scales: {
+            x: { stacked: true },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    async function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFont('Inter', 'normal');
+      doc.setFontSize(16);
+      doc.text('Hash Evaluation Result', 14, 18);
+      doc.setFontSize(11);
+      let y = 28;
+      const d = lastResult;
+      doc.text(`Combined Latency: ${d.latencyGabungan} ms`, 14, y); y+=7;
+      doc.text(`Scalability Efficiency: ${d.scalabilityGabungan} TPS per Node`, 14, y); y+=7;
+      doc.text(`SHA-512 Hash Time: ${d.waktuSHA512} ms`, 14, y); y+=7;
+      doc.text(`BLAKE3 Hash Time: ${d.waktuBlake3} ms`, 14, y); y+=7;
+      doc.text(`Combined Hash Time: ${d.waktuGabungan} ms`, 14, y); y+=7;
+      doc.text(`SHA-512 Throughput: ${d.throughputSHA512} MB/s`, 14, y); y+=7;
+      doc.text(`BLAKE3 Throughput: ${d.throughputBlake3} MB/s`, 14, y); y+=7;
+      doc.text(`Combined Throughput: ${d.throughputGabungan} MB/s`, 14, y); y+=10;
+      doc.text('Algorithm Security:', 14, y); y+=7;
+      doc.text(`SHA-512 Collision Resistance: ${d.keamananSHA512.collisionResistance}`, 14, y); y+=7;
+      doc.text(`SHA-512 Pre-image Resistance: ${d.keamananSHA512.preImageResistance}`, 14, y); y+=7;
+      doc.text(`BLAKE3 Collision Resistance: ${d.keamananBlake3.collisionResistance}`, 14, y); y+=7;
+      doc.text(`BLAKE3 Pre-image Resistance: ${d.keamananBlake3.preImageResistance}`, 14, y); y+=7;
+      doc.text(`Combined Collision Resistance: ${d.keamananGabungan.collisionResistance}`, 14, y); y+=7;
+      doc.text(`Combined Pre-image Resistance: ${d.keamananGabungan.preImageResistance}`, 14, y); y+=10;
+      // Chart export (optional, as image)
+      const chartCanvas = document.getElementById('hashChart');
+      if (chartCanvas) {
+        const imgData = chartCanvas.toDataURL('image/png', 1.0);
+        doc.addImage(imgData, 'PNG', 14, y, 180, 60);
+      }
+      doc.save('hash_evaluation_result.pdf');
+    }
+  </script>
+  <style>
+    .loader {
+      border: 4px solid #e0e7ef;
+      border-top: 4px solid #6366f1;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 0.5em;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .fadein {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1);
+    }
+    .result .fadein { opacity: 1; transform: translateY(0); }
+    @media (max-width: 600px) {
+      #hashChart { max-width: 98vw; }
+    }
+    .google-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(60,64,67,.08), 0 1.5px 4px rgba(60,64,67,.08);
+      padding: 1em 1.2em;
+      margin-bottom: 0.5em;
+      font-size: 1.04em;
+      color: #22223b;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2em;
+    }
+    .google-card .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 0.35em 0;
+      font-size: 1em;
+    }
+    .google-card .row:last-child {
+      border-bottom: none;
+    }
+    .google-card .label {
+      color: #5f6368;
+      font-weight: 500;
+      font-size: 0.98em;
+    }
+    .google-card .value {
+      color: #202124;
+      font-weight: 600;
+      font-family: 'Inter', Arial, sans-serif;
+      font-size: 1.01em;
+      letter-spacing: 0.01em;
+    }
+    .google-card .unit {
+      color: #a0aec0;
+      font-size: 0.93em;
+      margin-left: 2px;
+      font-weight: 400;
+    }
+    @media (max-width: 600px) {
+      .google-card { font-size: 0.97em; padding: 0.7em 0.5em; }
+      .google-card .row { font-size: 0.97em; }
+    }
+  </style>
+</body>
+</html>
